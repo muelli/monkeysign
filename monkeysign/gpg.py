@@ -576,12 +576,7 @@ class OpenPGPkey():
         if not self.expiry:
             ret = False
         else:
-            expiry = int(self.expiry)
-            if expiry == 0:
-                ret = False
-            else:
-                exp = datetime.fromtimestamp(expiry)
-                ret = datetime.now() > exp
+            ret = datetime.now() > self.expiry
         return ret
 
     # the key has been disabled
@@ -621,7 +616,24 @@ class OpenPGPkey():
 
     # This is the expiration timestamp of the subkey, or 0 if the
     # subkey does not expire.
-    expiry = 0
+    _expiry = 0
+    
+    @property
+    def expiry(self):
+        """Returns a datetime from the _expiry field or None if
+        the key does not expire"""
+        if self._expiry:
+            expiry = int(self._expiry)
+            if expiry > 0:
+                result = datetime.fromtimestamp(expiry)
+            else:
+                result = None
+        elif self._expiry == '':
+                result = None
+        else:
+            raise ValueError("Expiry is %r but we expected an int or string",
+                             self._expiry)
+        return result
 
     # single-character trust status, see trust_map below for parsing
     trust = None
@@ -688,7 +700,7 @@ class OpenPGPkey():
                 if not self.fpr:
                     self.fpr = record[9]
             elif rectype == 'pub':
-                (null, self.trust, self.length, self.algo, keyid, self.creation, self.expiry, serial, trust, uid, sigclass, purpose, smime) = record[:13]
+                (null, self.trust, self.length, self.algo, keyid, self.creation, self._expiry, serial, trust, uid, sigclass, purpose, smime) = record[:13]
                 for p in self.purpose:
                     self.purpose[p] = p[0].lower() in purpose.lower()
                 if self.trust == '':
@@ -700,18 +712,18 @@ class OpenPGPkey():
                 uidslist.append(uid)
             elif rectype == 'sub':
                 subkey = OpenPGPkey()
-                (rectype, trust, subkey.length, subkey.algo, subkey._keyid, subkey.creation, subkey.expiry, serial, trust, uid, sigclass, purpose, smime) = record[:13]
+                (rectype, trust, subkey.length, subkey.algo, subkey._keyid, subkey.creation, subkey._expiry, serial, trust, uid, sigclass, purpose, smime) = record[:13]
                 for p in subkey.purpose:
                     subkey.purpose[p] = p[0].lower() in purpose.lower()
                 self.subkeys[subkey._keyid] = subkey
             elif rectype == 'sec':
-                (null, self.trust, self.length, self.algo, keyid, self.creation, self.expiry, serial, trust, uid, sigclass, purpose, smime) = record[:13]
+                (null, self.trust, self.length, self.algo, keyid, self.creation, self._expiry, serial, trust, uid, sigclass, purpose, smime) = record[:13]
                 self.secret = True
                 if self.trust == '':
                     self.trust = '-'
             elif rectype == 'ssb':
                 subkey = OpenPGPkey()
-                (rectype, trust, subkey.length, subkey.algo, subkey._keyid, subkey.creation, subkey.expiry, serial, trust, uid, sigclass, purpose, smime) = record[:13]
+                (rectype, trust, subkey.length, subkey.algo, subkey._keyid, subkey.creation, subkey._expiry, serial, trust, uid, sigclass, purpose, smime) = record[:13]
                 if subkey._keyid in self.subkeys:
                     # XXX: nothing else to add here?
                     self.subkeys[subkey._keyid].secret = True
@@ -727,10 +739,11 @@ class OpenPGPkey():
                 raise NotImplementedError(_("record type '%s' not implemented") % rectype)
         if uidslist: self.uidslist = uidslist
 
+
     def __str__(self):
         ret = u'pub  [%s] %sR/' % (self.get_trust(), self.length)
         ret += self.keyid(8) + u" " + self.creation
-        if self.expiry: ret += u' [expiry: ' + self.expiry + ']'
+        if self._expiry: ret += u' [expiry: ' + str(self.expiry) + ']'
         ret += u"\n"
         ret += u'    Fingerprint = ' + self.format_fpr() + "\n"
         i = 1
@@ -739,7 +752,7 @@ class OpenPGPkey():
             i += 1
         for subkey in self.subkeys.values():
             ret += u"sub   " + subkey.length + u"R/" + subkey.keyid(8) + u" " + subkey.creation
-            if subkey.expiry: ret += u' [expiry: ' + subkey.expiry + "]"
+            if subkey._expiry: ret += u' [expiry: ' + str(subkey.expiry) + "]"
             ret += u"\n"
         return ret
 
