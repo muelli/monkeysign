@@ -197,8 +197,8 @@ class Context():
         this may hang for streams that do not send EOF or are waiting
         for input.
         """
-        line = fd.readline()
-        match = re.search(pattern, line)
+        line = True
+        match = False
         while line and not match:
             if self.debug: print >>self.debug, "skipped:", line,
             line = fd.readline()
