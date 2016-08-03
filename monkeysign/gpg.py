@@ -453,6 +453,9 @@ class Keyring():
         The pattern here should be a full user id if we sign a
         specific key (default) or any pattern (fingerprint, keyid,
         partial user id) that GPG will accept if we sign all uids.
+        
+        This function returns whether GnuPG was happy, i.e. returned 0.
+        If False is returned, the passphrase may be wrong.
 
         @todo that this currently block if the pattern specifies an
         incomplete UID and we do not sign all keys.
@@ -496,12 +499,6 @@ class Keyring():
                         raise GpgRuntimeError(self.context.returncode, _('unable to confirm key signing: %s') % e.found().decode('utf-8'))
                 self.context.write(proc.stdin, 'y')
                 self.context.expect(proc.stderr, 'GOT_IT')
-                # expect the passphrase confirmation
-                # we seek because i have seen a USERID_HINT <keyid> <uid> in some cases
-                try:
-                    self.context.seek(proc.stderr, 'GOOD_PASSPHRASE')
-                except GpgProtocolError:
-                    raise GpgRuntimeError(self.context.returncode, _('unable to prompt for passphrase, is gpg-agent running?'))
                 return proc.wait() == 0
 
             # don't sign all uids
@@ -540,14 +537,9 @@ class Keyring():
                 raise GpgRuntimeError(self.context.returncode, _('key is expired, cannot sign'))
             else:
                 raise GpgRuntimeError(self.context.returncode, _('unable to signing a single key: %s') % e.found().decode('utf-8') + proc.stderr.read())
-        # expect the passphrase confirmation
-        try:
-            self.context.seek(proc.stderr, 'GOOD_PASSPHRASE')
-        except GpgProtocolError:
-            raise GpgRuntimeError(self.context.returncode, _('password confirmation failed'))
         if multiuid:
             # we save the resulting key in uid selection mode
-            self.context.expect(proc.stderr, 'GET_LINE keyedit.prompt')
+            self.context.seek(proc.stderr, 'GET_LINE keyedit.prompt')
             self.context.write(proc.stdin, "save")
             self.context.expect(proc.stderr, 'GOT_IT')
         return proc.wait() == 0
