@@ -108,6 +108,12 @@ class Context():
     # if not false, needs to be a file descriptor
     debug = False
 
+    ignored_line_prefixes = (
+        # This is new in gpg2.1 and "only" shows
+        # which keys gpg looked at.
+        '[GNUPG:] KEY_CONSIDERED',
+    )
+
     def __init__(self):
         self.options = dict(Context.options) # copy
 
@@ -202,6 +208,10 @@ class Context():
         while line and not match:
             if self.debug: print >>self.debug, "skipped:", line,
             line = fd.readline()
+            if any((line.startswith(ignored_line)
+                    for ignored_line
+                    in self.ignored_line_prefixes)):
+                        continue
             match = re.search(pattern, line)
         if match:
             if self.debug: print >>self.debug, "FOUND:", line,
@@ -227,6 +237,10 @@ class Context():
         like seek_pattern()
         """
         line = fd.readline()
+        while any((line.startswith(ignored_line)
+                   for ignored_line
+                   in self.ignored_line_prefixes)):
+                        line = fd.readline()
         match = re.search(pattern, line)
 
         if self.debug:
